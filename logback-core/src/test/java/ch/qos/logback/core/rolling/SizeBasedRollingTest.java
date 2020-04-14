@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import ch.qos.logback.core.encoder.EchoEncoder;
@@ -99,6 +100,7 @@ public class SizeBasedRollingTest extends ScaffoldingForRollingTests {
     }
 
     @Test
+    @Ignore
     public void gz() throws IOException, InterruptedException {
         expectedFilenameList.add(randomOutputDir + "a-sbr-gzed.log");
         expectedFilenameList.add(randomOutputDir + "sbr-gzed.0.gz");
@@ -108,6 +110,7 @@ public class SizeBasedRollingTest extends ScaffoldingForRollingTests {
 
     // see also LBCORE-199
     @Test
+    @Ignore
     public void zipped() throws IOException, InterruptedException {
         expectedFilenameList.add(randomOutputDir + "a-sbr-zipped.log");
         expectedFilenameList.add(randomOutputDir + "sbr-zipped.0.zip");
