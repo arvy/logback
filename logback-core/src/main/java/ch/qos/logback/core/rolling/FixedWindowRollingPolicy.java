@@ -17,6 +17,9 @@ import static ch.qos.logback.core.CoreConstants.CODES_URL;
 
 import java.io.File;
 import java.util.Date;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import ch.qos.logback.core.CoreConstants;
 import ch.qos.logback.core.rolling.helper.*;
@@ -38,6 +41,9 @@ public class FixedWindowRollingPolicy extends RollingPolicyBase {
     int minIndex;
     RenameUtil util = new RenameUtil();
     Compressor compressor;
+    private RenameUtil renameUtil = new RenameUtil();
+
+    Future<?> compressionFuture;
 
     public static final String ZIP_ENTRY_DATE_PATTERN = "yyyy-MM-dd_HHmm";
 
@@ -149,13 +155,45 @@ public class FixedWindowRollingPolicy extends RollingPolicyBase {
                 util.rename(getActiveFileName(), fileNamePattern.convertInt(minIndex));
                 break;
             case GZ:
-                compressor.asyncCompress(getActiveFileName(), fileNamePattern.convertInt(minIndex), null);
+                compressionFuture = compressor.asyncCompress(getActiveFileName(), fileNamePattern.convertInt(minIndex), null);
                 break;
             case ZIP:
-                compressor.asyncCompress(getActiveFileName(), fileNamePattern.convertInt(minIndex), zipEntryFileNamePattern.convert(new Date()));
+
+                if (getParentsRawFileProperty() == null) {
+                    compressionFuture = compressor.asyncCompress(getActiveFileName(), fileNamePattern.convertInt(minIndex), zipEntryFileNamePattern.convert(new Date()));
+                } else {
+                    compressionFuture = renameRawAndAsyncCompress(fileNamePattern.convertInt(minIndex), zipEntryFileNamePattern.convert(new Date()));
+                }
                 break;
             }
         }
+    }
+
+    @Override
+    public void stop() {
+        if (!isStarted())
+            return;
+        waitForAsynchronousJobToStop(compressionFuture, "compression");
+        super.stop();
+    }
+
+    private void waitForAsynchronousJobToStop(Future<?> aFuture, String jobDescription) {
+        if (aFuture != null) {
+            try {
+                aFuture.get(CoreConstants.SECONDS_TO_WAIT_FOR_COMPRESSION_JOBS, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                addError("Timeout while waiting for " + jobDescription + " job to finish", e);
+            } catch (Exception e) {
+                addError("Unexpected exception while waiting for " + jobDescription + " job to finish", e);
+            }
+        }
+    }
+
+    Future<?> renameRawAndAsyncCompress(String nameOfCompressedFile, String innerEntryName) throws RolloverFailure {
+        String parentsRawFile = getParentsRawFileProperty();
+        String tmpTarget = nameOfCompressedFile + System.nanoTime() + ".tmp";
+        renameUtil.rename(parentsRawFile, tmpTarget);
+        return compressor.asyncCompress(tmpTarget, nameOfCompressedFile, innerEntryName);
     }
 
     /**
